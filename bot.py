@@ -24,10 +24,10 @@ try:
     with open("dictionary.txt") as json_dict:
         eventlist = json.load(json_dict)
         json_dict.close()
-    print("Loading dictionary from file successful!")
+    logger.info("Loading dictionary from file successful!")
 except:
     eventlist = {}
-    print("Loading dictionary from file failed!")
+    logger.info("Loading dictionary from file failed!")
 
 #3 - Helper functions
 def save(dict_file):
@@ -39,7 +39,7 @@ def save(dict_file):
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user.name} has connected to Discord!')
+    logger.info(f'{bot.user.name} has connected to Discord!')
     reminder_check.start()
 
 @bot.command(name='hello', help="Pings a given user, if they exist on the server")
@@ -108,7 +108,7 @@ async def set(ctx, command, eventname, *content):
     contentlist = []
     command_guild = ctx.guild
 
-    logger.info(command_guild)
+    logger.info("Guild ID for the guild !set was send from is: " + command_guild)
 
     if command == 'time':
         #for item in content:
@@ -201,7 +201,7 @@ async def reminder(ctx, eventname=None):
 
 @tasks.loop(hours=1)
 async def reminder_check():
-    print('Running loop')
+    logger.info('Running loop')
     now = datetime.now()
     now_timestamp = datetime.timestamp(now)
 
