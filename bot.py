@@ -151,7 +151,7 @@ async def set(ctx, command, eventname, *content):
         #eventlist[event].update(timeentry)
     elif command == 'who':
         eventlist[command_guild][eventname]['who'] = []
-        wholist = eventlist[eventname]['who']
+        wholist = eventlist[command_guild][eventname]['who']
         if content[0] == 'everyone':
             wholist.append('@everyone')
         else:
@@ -162,12 +162,19 @@ async def set(ctx, command, eventname, *content):
         save(eventlist)
 
     elif command == "auto":
-        if len(content)>1:
-            response = "Error: 'auto' only takes one argument: yes or no"
+        logger.info('content[0] is ' + content[0])
+        logger.info('content[1] is ' + str(type(content[1])))
+
+        if len(content)>2:
+            response = "Error: 'auto' only takes two arguments: 'yes or no' and an optional argument for the reminder hour (24-hour format)"
             await ctx.send(response)
         else:
+            logger.info(content)
             if content[0].lower() == 'yes':
-                eventlist[command_guild][eventname]['auto'] = True
+                if len(content) == 2:
+                    eventlist[command_guild][eventname]['auto'] = [True, int(f'{content[1]}')]
+                else:
+                    eventlist[command_guild][eventname]['auto'] = [True, 12]
                 eventlist[command_guild][eventname]['reminderchannel'] = 'general'
             elif content[0].lower() == 'no':
                 eventlist[command_guild][eventname]['auto'] = False
@@ -261,9 +268,13 @@ async def reminder_check():
             channel = discord.utils.get(guild.text_channels, name=f'{channelname}')
             logger.info(f'Channel ID is {channel.id}')
 
-            if eventlist[guild_id][eventname]['auto'] == True:
+            logger.info(eventlist[guild_id][eventname]['auto'][0])
+            logger.info('type is ' + str(type(eventlist[guild_id][eventname]['auto'][0])))
+            if eventlist[guild_id][eventname]['auto'][0] == True:
                 stored_timestamp = int(eventlist[guild_id][eventname]['time'])
-                if (stored_timestamp - now_timestamp < 86400) and (now.hour == 12):
+                logger.info('Hour to check against is ' + str(eventlist[guild_id][eventname]['auto'][1]))
+                logger.info('Type is ' + str(type(eventlist[guild_id][eventname]['auto'][1])))
+                if (stored_timestamp - now_timestamp < 86400) and (now.hour == eventlist[guild_id][eventname]['auto'][1]):
                     who = eventlist[guild_id][eventname]['who']
 
                     if who[0] == '@everyone':
