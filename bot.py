@@ -42,9 +42,16 @@ async def on_ready():
     logger.info(f'{bot.user.name} has connected to Discord!')
     reminder_check.start()
 
+@bot.event
+async def on_guild_join(guild):
+    logger.info("Joined guild: " + str(guild))
+    command_guild = str(guild.id)
+    eventlist.update({f'{command_guild}': {}})
+    save(eventlist)
+
 @bot.command(name='hello', help="Pings a given user, if they exist on the server")
 async def hello(ctx, username=None):
-    command_guild = ctx.guild.id
+    command_guild = str(ctx.guild.id)
 
     logger.info(command_guild)
 
@@ -52,8 +59,9 @@ async def hello(ctx, username=None):
         response = f'User {username} does not exist!'
         await ctx.send(response)
 
-    id = ctx.message.guild.id
-    guild = bot.get_guild(id)
+    #id = ctx.message.guild.id
+    #guild = bot.get_guild(id)
+    guild = int(command_guild)
     user = discord.utils.get(guild.members, name=username)
     print(username)
     print('user id is: ' + str(user.id))
@@ -63,11 +71,13 @@ async def hello(ctx, username=None):
 
 @bot.command(name='addevent', help='Adds an event to the schedule. Usage: !addevent <event>')
 async def addevent(ctx, eventname):
-    if eventname in eventlist.keys():
+    command_guild = str(ctx.guild.id)
+
+    if eventname in eventlist[command_guild].keys():
         response = f'Event {eventname} already exists!'
         await ctx.send(response)
     else:
-        eventlist.update({f'{eventname}': {}})
+        eventlist[command_guild].update({f'{eventname}': {}})
         save(eventlist)
         response = f'Event {eventname} added!'
         await ctx.send(response)
@@ -75,19 +85,29 @@ async def addevent(ctx, eventname):
 @bot.command(name='eventlist', help="Lists the names of all current events")
 async def listevents(ctx, *args):
     print(eventlist)
+    command_guild = str(ctx.guild.id)
+
+    try:
+        logger.info(eventlist[command_guild])
+    except:
+        eventlist.update({f'{command_guild}': {}})
+        logger.info(eventlist[command_guild])
+
     if len(args) == 0:
-        if len(eventlist) == 0:
+        if len(eventlist[command_guild]) == 0:
             await ctx.send('There are no scheduled events in the list!')
         else:
-            events = '\n - '.join(key for key, value in eventlist.items())
+            events = '\n - '.join(key for key, value in eventlist[command_guild].items())
             await ctx.send(f'Events:\n - {events}')
     else:
         await ctx.send('nope')
 
 @bot.command(name='when', help='Displays when the asked-for event is scheduled to occur. Usage: !when <event>')
 async def when(ctx, eventname):
-    if eventname in eventlist.keys():
-        timestmp = eventlist[eventname]['time']
+    command_guild = str(ctx.guild.id)
+
+    if eventname in eventlist[command_guild].keys():
+        timestmp = eventlist[command_guild][eventname]['time']
         response = f'{eventname} will happen on <t:{timestmp}:F>'
         await ctx.send(response)
     else:
@@ -106,9 +126,9 @@ async def set(ctx, command, eventname, *content):
     guild = bot.get_guild(id)
     contentstr = ''
     contentlist = []
-    command_guild = ctx.guild
+    command_guild = str(ctx.guild.id)
 
-    logger.info("Guild ID for the guild !set was send from is: " + command_guild)
+    logger.info("Guild ID for the guild !set was sent from is: " + command_guild)
 
     if command == 'time':
         #for item in content:
@@ -123,12 +143,12 @@ async def set(ctx, command, eventname, *content):
 
         timestmp = int((datetime.strptime(contentstr.strip(), "%m/%d/%Y %I:%M %p")).timestamp())
         timeentry = {'time': timestmp}
-        eventlist[eventname].update(timeentry)
+        eventlist[command_guild][eventname].update(timeentry)
         save(eventlist)
 
         #eventlist[event].update(timeentry)
     elif command == 'who':
-        eventlist[eventname]['who'] = []
+        eventlist[command_guild][eventname]['who'] = []
         wholist = eventlist[eventname]['who']
         if content[0] == 'everyone':
             wholist.append('@everyone')
@@ -145,9 +165,9 @@ async def set(ctx, command, eventname, *content):
             await ctx.send(response)
         else:
             if content[0].lower() == 'yes':
-                eventlist[eventname]['auto'] = True
+                eventlist[command_guild][eventname]['auto'] = True
             elif content[0].lower() == 'no':
-                eventlist[eventname]['auto'] = False
+                eventlist[command_guild][eventname]['auto'] = False
             else:
                 response = "Error: argument for 'auto' must be either 'yes' or 'no'"
                 await ctx.send(response)
@@ -159,7 +179,9 @@ async def set(ctx, command, eventname, *content):
 
 @bot.command(name='who', help="Enter an event's name to see who's attending Usage: !who <event>")
 async def getWho(ctx, eventname=None):
-    who = eventlist[eventname]['who']
+    command_guild = str(ctx.guild.id)
+
+    who = eventlist[command_guild][eventname]['who']
     content = []
 
     if eventname is None:
@@ -178,12 +200,14 @@ async def getWho(ctx, eventname=None):
 
 @bot.command(name='remind', help='Ping the users attending a given event. Usage: !remind <event>')
 async def reminder(ctx, eventname=None):
+    command_guild = str(ctx.guild.id)
+
     if eventname is None:
         response = "You must supply an event to remind people of!"
         await ctx.send(response)
     else:
-        who = eventlist[eventname]['who']
-        timestamp = eventlist[eventname]['time']
+        who = eventlist[command_guild][eventname]['who']
+        timestamp = eventlist[command_guild][eventname]['time']
         id = ctx.message.guild.id
         guild = bot.get_guild(id)
 
@@ -210,10 +234,10 @@ async def reminder_check():
     guild = bot.get_guild(872282470396080208)
 
     for eventname in eventlist:
-        if eventlist[eventname]['auto'] == True:
-            stored_timestamp = int(eventlist[eventname]['time'])
+        if eventlist[guild][eventname]['auto'] == True:
+            stored_timestamp = int(eventlist[guild][eventname]['time'])
             if (stored_timestamp - now_timestamp < 86400) and (now.hour == 12):
-                who = eventlist[eventname]['who']
+                who = eventlist[guild][eventname]['who']
 
                 if who[0] == '@everyone':
                     whostr = '@everyone'
