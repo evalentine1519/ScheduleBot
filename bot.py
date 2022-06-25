@@ -52,8 +52,10 @@ async def on_guild_join(guild):
 @bot.command(name='hello', help="Pings a given user, if they exist on the server")
 async def hello(ctx, username=None):
     command_guild = str(ctx.guild.id)
+    command_channel = str(ctx.channel.id)
 
     logger.info(command_guild)
+    logger.info("Command sent from channel with ID: " + command_channel)
 
     if username is None:
         response = f'User {username} does not exist!'
@@ -61,7 +63,7 @@ async def hello(ctx, username=None):
 
     #id = ctx.message.guild.id
     #guild = bot.get_guild(id)
-    guild = int(command_guild)
+    guild = bot.get_guild(int(command_guild))
     user = discord.utils.get(guild.members, name=username)
     print(username)
     print('user id is: ' + str(user.id))
@@ -166,12 +168,30 @@ async def set(ctx, command, eventname, *content):
         else:
             if content[0].lower() == 'yes':
                 eventlist[command_guild][eventname]['auto'] = True
+                eventlist[command_guild][eventname]['reminderchannel'] = 'general'
             elif content[0].lower() == 'no':
                 eventlist[command_guild][eventname]['auto'] = False
             else:
                 response = "Error: argument for 'auto' must be either 'yes' or 'no'"
                 await ctx.send(response)
             save(eventlist)
+    
+    elif command == 'reminderchannel':
+        if len(content) > 1:
+            response = "Error: Channel name must be one word"
+            await ctx.send(response)
+        else:
+            guild = bot.get_guild(int(command_guild))
+            channel = discord.utils.get(guild.text_channels, name=f'{content[0]}')
+            if channel == None:
+                response = "Error: Channel does not exist in this server."
+                await ctx.send(response)
+            else:
+                eventlist[command_guild][eventname]['reminderchannel'] = content[0]
+                response = f"Automatic reminder will be sent to {content[0]}"
+                await ctx.send(response)
+        save(eventlist)
+        return
 
 
     response = f'{command} for {eventname} set!'
@@ -229,27 +249,34 @@ async def reminder_check():
     now = datetime.now()
     now_timestamp = datetime.timestamp(now)
 
-    #These will need to be changed if bot is used on multiple servers
-    channel = bot.get_channel(872282820314292235)
-    guild = bot.get_guild(872282470396080208)
+    for guild_id in eventlist:
+        logger.info(f'Eventlist is {eventlist}')
+        guild = bot.get_guild(int(guild_id))
+        #channelname = eventlist[guild_id][]
+        #channel = discord.utils.get(guild.text_channels, name='general')
+        logger.info(f'Guild ID of {guild} is {guild.id}')
 
-    for eventname in eventlist:
-        if eventlist[guild][eventname]['auto'] == True:
-            stored_timestamp = int(eventlist[guild][eventname]['time'])
-            if (stored_timestamp - now_timestamp < 86400) and (now.hour == 12):
-                who = eventlist[guild][eventname]['who']
+        for eventname in eventlist[guild_id]:
+            channelname = eventlist[guild_id][eventname]['reminderchannel']
+            channel = discord.utils.get(guild.text_channels, name=f'{channelname}')
+            logger.info(f'Channel ID is {channel.id}')
 
-                if who[0] == '@everyone':
-                    whostr = '@everyone'
-                else:
-                    wholist = []
-                    for people in who:
-                        user = discord.utils.get(guild.members, name=people[0])
-                        wholist.append(f'<@{user.id}>')
-                    whostr = ' '.join(wholist)
+            if eventlist[guild_id][eventname]['auto'] == True:
+                stored_timestamp = int(eventlist[guild_id][eventname]['time'])
+                if (stored_timestamp - now_timestamp < 86400) and (now.hour == 12):
+                    who = eventlist[guild_id][eventname]['who']
 
-                response = f'{whostr} Reminder, {eventname} is scheduled for <t:{stored_timestamp}:F>'
-                await channel.send(response)
+                    if who[0] == '@everyone':
+                        whostr = '@everyone'
+                    else:
+                        wholist = []
+                        for people in who:
+                            user = discord.utils.get(guild.members, name=people[0])
+                            wholist.append(f'<@{user.id}>')
+                        whostr = ' '.join(wholist)
+
+                    response = f'{whostr} Reminder, {eventname} is scheduled for <t:{stored_timestamp}:F>'
+                    await channel.send(response)
 
 
 
