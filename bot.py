@@ -6,14 +6,27 @@ from datetime import datetime
 import discord
 import json
 import logging
+from random import randint
+from requests import get
 
 # 1
 from discord.ext import commands, tasks
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+TENOR_API = os.getenv('TENOR_API')
 intents = discord.Intents.default()
 intents.members = True
+
+giflist = ['https://c.tenor.com/viw-vfM60tUAAAAC/spongebob-art-thou-feeling.gif',
+            'https://c.tenor.com/COIkgK11ZcwAAAAC/dungeons-and-dragons-tbbt.gif',
+            'https://c.tenor.com/VBmD41K54dEAAAAd/can-we-play-stranger-things.gif',
+            'https://c.tenor.com/5beO3hQkNqMAAAAd/criticalrole-critrole.gif',
+            'https://c.tenor.com/ijrIbEWVPDIAAAAC/i-want-you-gandalf.gif',
+            'https://c.tenor.com/tmaf0isifhwAAAAC/beholder-monster.gif',
+            'https://c.tenor.com/Aa4rQBXubYcAAAAd/dn-d.gif',
+            'https://c.tenor.com/E3AinNipE1IAAAAC/batman-mr-freeze.gif'
+            ]
 
 # 2
 logging.basicConfig(level=logging.INFO, filename='bot.log', format='%(asctime)s :: %(levelname)s :: %(message)s')
@@ -35,7 +48,56 @@ def save(dict_file):
         json_dict.write(json.dumps(dict_file))
         json_dict.close()
 
+def get_gif(search_term, limit):
+    #searches tenor for a given search term for a given number of results, returns a random gif url from those results
+    r = get(f'https://tenor.googleapis.com/v2/search?q={search_term}&key={TENOR_API}&media_filter=gif&limit={limit}')
+    r_dict = json.loads(r.content)
+    index = randint(0, (len(r_dict['results'])-1))
+    result = r_dict['results'][index]['media_formats']['gif']['url']
+    return result
 
+def get_spell(name):
+    if len(name) > 1:
+        name = '-'.join(name)
+    else:
+        name = str(name[0])
+
+    logger.info(type(name))
+    logger.info(name)
+    spell = get(f'https://www.dnd5eapi.co/api/spells/{name}')
+    logger.info(spell)
+
+    if spell.status_code == 404:
+        return "That spell does not exist"
+
+    spell = json.loads(spell.content)
+    is_ritual = spell['ritual']
+    if spell['level'] == 1:
+        level = f"{spell['level']}st-level"
+    elif spell['level'] == 2:
+        level = f"{spell['level']}nd-level"
+    elif spell['level'] == 3:
+        level = f"{spell['level']}rd-level"
+    else:
+        level = f"{spell['level']}th-level"
+    level_info = f"{level} {spell['school']['name']}"
+
+    if is_ritual == True:
+        level_info = level_info + " (ritual)"
+
+    component_info = ', '.join(spell['components'])
+
+    try:
+        spell['material']
+    except:
+        pass
+    else:
+        component_info = component_info + f" ({spell['material']})"
+
+    spell_text = f"***{spell['name']}***\n*{level_info}*\n\n**Casting Time:** {spell['casting_time']}\n**Range:** {spell['range']}\n**Components:** {component_info}\n**Duration:** {spell['duration']}\n\n{' '.join(spell['desc'])}"
+    logger.info(spell_text)
+
+    return spell_text
 
 @bot.event
 async def on_ready():
@@ -48,6 +110,21 @@ async def on_guild_join(guild):
     command_guild = str(guild.id)
     eventlist.update({f'{command_guild}': {}})
     save(eventlist)
+
+@bot.command(name='shitpost')
+async def shitpost(ctx, term='dnd', limit='20'):
+    logger.info('trying to shitpost')
+    response = get_gif(term, limit)
+    await ctx.send(response)
+
+@bot.command(name='5e')
+async def get_rules(ctx, resource, *spellname):
+    logger.info(resource)
+    if resource == 'spell':
+        logger.info('getting spell')
+        response = get_spell(spellname)
+        logger.info('spell gotten')
+    await ctx.send(response)
 
 @bot.command(name='hello', help="Pings a given user, if they exist on the server")
 async def hello(ctx, username=None):
@@ -232,7 +309,9 @@ async def reminder(ctx, eventname=None):
 
 @tasks.loop(hours=1)
 async def reminder_check():
-    logger.info('Running loop')
+    #Reconfigure so that loop calls a reminder helper function instead of sending reminder from the loop-
+    #sending a message from the loop makes it exit after it reminds about the first event it encounters
+    logger.info('Running reminder loop')
     now = datetime.now()
     now_timestamp = datetime.timestamp(now)
 
@@ -245,7 +324,6 @@ async def reminder_check():
 
             if eventlist[guild_id][eventname]['auto'][0] == True:
                 stored_timestamp = int(eventlist[guild_id][eventname]['time'])
-                #add check to following line so it won't trigger with a negative number (on days after the scheduled day)
                 if (stored_timestamp - now_timestamp < 86400 and stored_timestamp - now_timestamp > 0) and (now.hour == eventlist[guild_id][eventname]['auto'][1]):
                     who = eventlist[guild_id][eventname]['who']
 
@@ -259,6 +337,10 @@ async def reminder_check():
                         whostr = ' '.join(wholist)
 
                     response = f'{whostr} Reminder, {eventname} is scheduled for <t:{stored_timestamp}:F>'
+                    logger.info(eventname)
+                    if eventname == 'dnd':
+                        index = randint(0, (len(giflist)-1))
+                        response = response + '\n' + giflist[index]
                     await channel.send(response)
 
 
