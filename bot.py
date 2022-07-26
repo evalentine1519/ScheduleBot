@@ -343,6 +343,10 @@ async def reminder_check():
                         response = response + '\n' + giflist[index]
                     await channel.send(response)
 
+@reminder_check.before_loop
+async def before_reminder_check():
+    await bot.wait_until_ready()
+
 
 
 
